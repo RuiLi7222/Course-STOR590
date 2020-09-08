@@ -1,0 +1,124 @@
+
+library(faraway)
+data(gavote)
+help(gavote)
+
+# introducing the data
+
+head(gavote)
+str(gavote)
+summary(gavote)
+
+gavote$undercount=(gavote$ballots-gavote$votes)/gavote$ballots
+summary(gavote$undercount)
+
+# not the same as
+with(gavote,sum(ballots-votes)/sum(ballots))
+
+# graphical and summary statistics
+
+hist(gavote$undercount, main='Undercount',xlab='Proportion Undercount')
+
+hist(gavote$undercount, main='Undercount',xlab='Proportion Undercount',breaks=20)
+# same with a larger number of bins
+
+plot(density(gavote$undercount),main='Undercount')
+rug(gavote$undercount)
+
+pie(table(gavote$equip))
+
+barplot(sort(table(gavote$equip),decreasing=TRUE),las=2)
+
+gavote$pergore = gavote$gore/gavote$votes
+plot(pergore ~ perAA, gavote, xlab='Proportion African Americans',ylab='Proportion for Gore')
+
+plot(undercount~equip, gavote, xlab='', las=3)
+
+xtabs(~atlanta+rural,gavote)
+
+# added
+xtabs(~atlanta+rural+equip,gavote)
+
+names(gavote)[4]='usage'
+
+nix=c(3,10,11,12)
+cor(gavote[,nix])
+
+# introducing linear models for this dataset
+
+lmod=lm(undercount~pergore+perAA,gavote)
+coef(lmod)
+
+# could summarize results by
+summary(lmod)
+
+# or alternatively extract specific features of the model fit by the following sequence of commands
+
+predict(lmod)
+residuals(lmod)
+
+predict(lmod,se.fit=T)
+
+deviance(lmod)
+
+df.residual(lmod)
+
+nrow(gavote)-length(coef(lmod))
+
+sqrt(deviance(lmod)/df.residual(lmod))
+
+lmodsum=summary(lmod)
+
+lmodsum$sigma
+
+lmodsum$r.squared
+
+cor(predict(lmod),gavote$undercount)^2
+
+lmodsum$adj.r.squared
+
+
+# now fit a more complicated linear model, includes an interaction term
+
+gavote$cpergore=gavote$pergore-mean(gavote$pergore)
+gavote$cperAA=gavote$perAA-mean(gavote$perAA)
+lmodi=lm(undercount~cperAA+cpergore*usage+equip,gavote)
+
+
+summary(lmodi)
+
+# illustrates hypothesis testing through F test
+anova(lmod,lmodi)
+
+# p-value is 0.003 - reject null hypothesis that the simpler model (lmod) is correct
+
+drop1(lmodi,test='F')
+# drops variables one at a time using F tests to determine which are significant
+
+
+confint(lmodi)
+
+plot(lmodi)
+# this defines the sequence of four diagnostic plots. The first three should be self-explanatory -
+I'll discuss the fourth next time
+
+
+# A simplified form of the "summary" comment (specific to the faraway package) is this:
+sumary(lmod)
+
+# first look at the NOrth Carolina dataset
+Y=read.csv('C:/Users/rsmith/jan16/UNC/STOR556/Data/ProportionNotReturned.csv',header=T)
+
+hist(Y$PNR,main='Proportion Absentee Ballots Not Returned - NC Nov 2018')
+plot(density(Y$PNR),main='Proportion Absentee Ballots Not Returned - NC Nov 2018')
+rug(Y$PNR)
+
+wts=Y$PNR<0.1
+# example of a plausible linear model (not the solution to HW1)
+lm1=lm(Y$PNR~Y$Hsgrad+Y$Collgrad,weights=as.numeric(wts))
+# note use of "as.numeric" to turn wts into a numerical variable
+
+# now create predictions
+predict(lm1,se.fit=T)
+
+# the predictions for counties 9 and 78 are what you want

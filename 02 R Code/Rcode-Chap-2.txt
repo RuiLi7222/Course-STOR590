@@ -1,0 +1,223 @@
+
+
+# Chapter 2
+
+# 2.1 Initial graphical displays
+
+library('faraway')
+
+data(wcgs)
+
+summary(wcgs[c("chd","height","cigs")])
+
+plot(height~chd,wcgs)
+
+wcgs$y=ifelse(wcgs$chd=="no",0,1)
+
+plot(jitter(y,0.1)~jitter(height),wcgs,xlab='Height',ylab='Heart Disease',pch='.')
+
+library(ggplot2)
+
+# the next two commands are a little different from the text
+ggplot(wcgs,aes(x=height,color=chd,fill=chd))+geom_histogram(position='dodge',binwidth=1)
+
+ggplot(wcgs,aes(x=cigs,color=chd,fill=chd))+geom_histogram(position='dodge',binwidth=5,aes(y=..density..))
+
+ggplot(wcgs,aes(x=height,y=cigs))+geom_point(alpha=0.2,position=position_jitter())+facet_grid(~chd)
+
+# 2.2 Fitting models by logistic regression
+
+lmod=glm(chd~height+cigs,family=binomial,wcgs)
+
+summary(lmod)
+# or Faraway's own command: sumary(lmod)
+
+beta=coef(lmod)
+plot(jitter(y,0.1)~jitter(height),wcgs,xlab='Height',ylab='Heart Disease',pch='.')
+curve(ilogit(beta[1]+beta[2]*x+beta[3]*0),add=T)
+curve(ilogit(beta[1]+beta[2]*x+beta[3]*20),add=T,lty=2)
+
+plot(jitter(y,0.1)~jitter(cigs),wcgs,xlab='Cigarettes',ylab='Heart Disease',pch='.')
+curve(ilogit(beta[1]+beta[2]*60+beta[3]*x),add=T)
+curve(ilogit(beta[1]+beta[2]*78+beta[3]*x),add=T,lty=2)
+
+# relative risk calculation for a 68-inch man who smokes 20 a day against 
+# a 68-inch man who smokes none
+print(c(ilogit(sum(beta*c(1,68,20))),ilogit(sum(beta*c(1,68,0)))))
+
+# relative risk
+ilogit(sum(beta*c(1,68,20)))/ilogit(sum(beta*c(1,68,0)))
+
+
+# 2.3 Inference - confidence intervals and tests
+
+# testing null deviance v. residual deviance in lmod: deviance changes by
+# 1781.2-1749.0=32.2 with 2 degrees of freedom
+pchisq(32.2,2,lower.tail=F)
+
+# various related tests
+
+lmodc=glm(chd~cigs,family=binomial,wcgs)
+
+anova(lmodc,lmod,test='Chi')
+
+drop1(lmod,test='Chi')
+
+confint(lmod)
+
+# Hauck-Dinner effect - these three methods give slightly different answers
+
+# 2.4 diagnostics
+
+linpred=predict(lmod)
+predprob=predict(lmod,type='response')
+
+head(linpred)
+head(predprob)
+head(ilogit(linpred))
+
+
+rawres=wcgs$y-predprob
+
+plot(rawres~linpred,xlab='Linear Predictor',ylab='Residuals')
+
+# introducing deviance residuals
+
+plot(residuals(lmod)~linpred,xlab='Linear Predictor',ylab='Deviance Residuals')
+
+# better way to display residuals - first group into bins, then plot bin averages
+
+library(dplyr)
+wcgs=mutate(wcgs,residuals=residuals(lmod),linpred=predict(lmod))
+gdf=group_by(wcgs,cut(linpred,breaks=unique(quantile(linpred,(1:100)/101))))
+diagdf=summarise(gdf,residuals=mean(residuals),linpred=mean(linpred))
+plot(residuals~linpred,diagdf,xlab='Linear Predictor',pch=20)
+
+gdf=group_by(wcgs,height)
+diagdf=summarise(gdf,residuals=mean(residuals))
+ggplot(diagdf,aes(x=height,y=residuals))+geom_point()
+
+# investigate large residual for height 77
+
+filter(wcgs,height==77) %>% select(height,cigs,chd,residuals)
+
+# explanation - this group contains only three data points, too small to matter
+
+group_by(wcgs,cigs) %>% summarise(residuals=mean(residuals),count=n()) %>% ggplot(aes(x=cigs,y=residuals,size=sqrt(count)))+geom_point()
+
+# some outliers again correspond to very small groups
+
+qqnorm(residuals(lmod))
+
+# don't expect lineaer relationship with binary data
+
+halfnorm(hatvalues(lmod))
+
+# some large values here - correspond to individuals with large smoking but no chd
+
+filter(wcgs,hatvalues(lmod)>0.015) %>% select(height,cigs,chd)
+
+# 2.5 Model Selection
+
+# sequential search for best model using AIC
+wcgs$bmi=with(wcgs,703*weight/(wcgs$height^2))
+lmod=glm(chd~age+height+weight+bmi+sdp+dbp+chol+dibep+cigs+arcus,family=binomial,wcgs)
+lmodr=step(lmod,trace=0)
+sumary(lmod)
+sumary(lmodr)
+
+## compare previous "best" model with one that includes only dbp
+
+drop1(glm(chd~dbp,family=binomial,wcgs),test='Chi')
+
+# the conclusion is that bdp on its own is significant even though it was not
+# included in the best model by AIC
+
+# 2.6 Goodness of fit
+wcgsm=na.omit(wcgs)
+wcgsm=mutate(wcgsm,predprob=predict(lmod,type='response'))
+gdf=group_by(wcgsm,cut(linpred,breaks=unique(quantile(linpred,(1:100)/101))))
+hldf=summarise(gdf,y=sum(y),ppred=mean(predprob),count=n())
+
+
+hldf=mutate(hldf,se.fit=sqrt(ppred*(1-ppred)/count))
+ggplot(hldf,aes(x=ppred,y=y/count,ymin=y/count-2*se.fit,ymax=y/count+2*se.fit))+geom_point()+
+geom_linerange(color=grey(0.75))+geom_abline(intercept=0,slope=1)+xlab('Predicted Probability')+
+ylab("Observed Proportion")
+
+# Hosmer-Lemeshow test is a formal test for departure from omdel
+
+hlstat=with(hldf,sum((y-count*ppred)^2/(count*ppred*(1-ppred))))
+c(hlstat,nrow(hldf))
+
+1-pchisq(63.212,56-1)
+
+# not statistically significant
+
+# Here's another way to do this
+
+library(generalhoslem) # may have to install first
+logitgof(wcgsm$y, wcgsm$predprob, g = 20)
+# the above performs the H-L test
+# g is number of groups - may have to try different values
+
+
+
+# Use for classification - any value w ith predprob<0.5 is predicted no chd, otherwise yes
+wcgsm=mutate(wcgsm,predout=ifelse(predprob<0.5,"no","yes"))
+xtabs(~chd+predout,wcgsm)
+
+(2882+2)/(2882+3+253+2)
+# 92% success rate but not much better than random guessing in this example
+
+# sensitivity v. specificity plots
+thresh=seq(0.01,0.5,0.01)
+Sensitivity=numeric(length(thresh))
+Specificity=numeric(length(thresh))
+for(j in seq(along=thresh)){
+pp=ifelse(wcgsm$predprob<thresh[j],"no","yes")
+xx=xtabs(~chd+pp,wcgsm)
+Specificity[j]=xx[1,1]/(xx[1,1]+xx[1,2])
+Sensitivity[j]=xx[2,2]/(xx[2,1]+xx[2,2])
+}
+matplot(thresh,cbind(Sensitivity,Specificity),type='l',xlab='Threshold',ylab='Proportion',lty=1:2)
+
+# Alternative "ROC curve"
+plot(1-Specificity,Sensitivity,type='l')
+abline(0,1,lty=2)
+
+# Naglekerke statistic (analog of R^2)
+
+lmodr=glm(chd~age+height+bmi+sdp+chol+dibep+cigs+arcus,family=binomial,wcgs)
+(1-exp((lmodr$dev-lmodr$null)/3140))/(1-exp(-lmodr$null/3140))
+
+
+# the rest are analyses of my own that I may not get to
+
+
+# my analysis
+library(splines)
+lmod3=glm(chd~poly(height,4)+poly(cigs,4),family=binomial,wcgs)
+summary(lmod3)
+
+drop1(lmod3)
+
+pchisq(1747.2-1744.6,4,lower.tail=F)
+pchisq(1778.2-1744.6,4,lower.tail=F)
+
+lmod4=glm(chd~poly(cigs,2),family=binomial,wcgs)
+summary(lmod4)
+
+plot(wcgs$cigs,lmod4$fitted,pch=20)
+
+thr=40
+wcgs$cigthr=(wcgs$cigs-thr)*(wcgs$cigs>thr)
+lmod5=glm(chd~cigs+cigthr,family=binomial,wcgs)
+summary(lmod5)
+
+plot(wcgs$cigs,lmod5$fitted,pch=20)
+
+
+
+
+

@@ -1,0 +1,349 @@
+---
+title: "HOMEWORK 2 - Exercises in Faraway Introduction"
+author: "Rui Li"
+date: "8/27/2020"
+header-includes:
+- \usepackage{amsgen,amsmath,amstext,amsbsy,amsopn,amssymb,mathabx,amsthm,bm,bbm}
+- \usepackage[labelsep=space]{caption}
+output:
+  word_document: default
+  html_document: default
+subtitle: $\textbf{STOR 590, FALL 2020}$
+---
+
+**Instructions**
+
+Question 1: Faraway, page 24, exercise 2 (“rock” dataset)
+
+Question 2: Faraway, page 24, exercise 5 (“prostate” dataset)
+
+In each case, I’d like you to conduct an analysis, following the six bullet points listed in the question. Lengthy answers are not required, but you should be sure to address each of these bullet points in your answer.
+
+Due time and date: 1:00 pm Friday, August 28
+
+**Exercises**
+
+Since this is a review chapter, it is best to consult the recommended background texts for specific questions on linear models. However, it is worthwhile gaining some practice using R on some real data. Your data analysis should consist of:
+
+*1. An initial data analysis that explores the numerical and graphical characteristics of the data.*
+
+*2. Variable selection to choose the best model.*
+
+*3. An exploration of transformations to improve the fit of the model.*
+
+*4. Diagnostics to check the assumptions of your model.*
+
+*5. Some predictions of future observations for interesting values of the predictors.*
+
+*6. An interpretation of the meaning of the model with respect to the particular area of application.*
+
+There is always some freedom in deciding which methods to use, in what order to apply them, and how to interpret the results. So there may not be one clear right answer and good analysts may come up with different models.
+
+**Exercise 2** The *rock* data - use *perm* as the response.
+
+# Load *rock* data
+```{r}
+library(faraway)
+head(rock)
+str(rock)
+```
+
+According to the information above, we know that *rock* is a data frame with 48 observations and 4 numeric columns. 
+
+**area:** Area of pores space, in pixels out of 256 by 256.
+
+**peri:** Perimeter in pixels.
+
+**shape:** Perimeter/sqrt(area).
+
+**perm:** Permeability in milli-Darcies.
+
+# Initial Data Analysis
+```{r}
+#Summarize the dataset
+summary(rock)
+```
+
+We have four numerical variables, and the six summary statistics show us the general distribution of the variables. I am going to analyze in depth with each variable, and the *perm* response.
+
+```{r}
+#Distribution of each variable
+#Perm
+library(ggplot2)
+ggplot(rock, aes(x=perm)) + 
+  geom_histogram(aes(y=..density..), bins = 20,fill = "white", col = "black") + 
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_rug() +
+  labs(title = 'Distribution of Perm') + 
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold.italic"))
+
+#Area
+ggplot(rock, aes(x=area)) + 
+  geom_histogram(aes(y=..density..), bins = 20,fill = "white", col = "black") + 
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_rug() +
+  labs(title = 'Distribution of Area') + 
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold.italic"))
+
+#Peri
+ggplot(rock, aes(x=peri)) + 
+  geom_histogram(aes(y=..density..), bins = 20,fill = "white", col = "black") + 
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_rug() +
+  labs(title = 'Distribution of Peri') + 
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold.italic"))
+
+#Shape
+library(ggplot2)
+ggplot(rock, aes(x=shape)) + 
+  geom_histogram(aes(y=..density..), bins = 20,fill = "white", col = "black") + 
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_rug() +
+  labs(title = 'Distribution of Shape') + 
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold.italic"))
+```
+
+From the distribution plots above, we can see that there are some outliers in bothe *perm* response and *Shape* variable. We should be careful about them in the following analysis. 
+
+```{r}
+#Correlation between variables
+cor(rock)
+#Pair Plots
+library(ggplot2)
+library(GGally)
+ggpairs(rock) + 
+  ggtitle("Pair Plots of Rock") + 
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold.italic"))
+```
+
+From the results above, we can see that *area*, *peri*, and *shape* has some correlations with *perm*. We can continue to define a linear model, and find deeper relationship. 
+
+# Variable Selection
+```{r}
+#Build up full model
+full.lm = lm(formula = perm ~ ., data = rock)
+print(summary(full.lm))
+
+#Apply backward selection model
+full.backward = step(full.lm, direction = "backward")
+print(summary(full.backward))
+
+#Apply forward selection model
+full.forward <- step(lm(perm ~ 1, data=rock), list(upper=full.lm), direction='forward')
+print(summary(full.forward))
+```
+
+I apply both backward and forward selection to the model, and have the same optimal model. According to the report, the optimal model is exactly the same as the full model, *perm ~ area + peri + shape*. However, the significant importance of variable *shape* is mild. We may think of improving the model by transforming some of the variables.
+
+# Exploration of Transformations
+
+*Transform the response perm*
+```{r}
+#Box-Cox Transformation of the response
+library(MASS)
+full.bc = boxcox(perm ~ area + peri + shape, data=rock)
+#Get the lamda of maximum log-Likelihood
+lamda.max = full.bc$x[full.bc$y==max(full.bc$y)]
+
+#Set up new Model
+bc.lm = lm(perm^lamda.max ~ area + peri + shape, data=rock)
+summary(bc.lm)
+```
+
+*Diagnostics of models before and after Box-Cox Transformation*
+```{r}
+#Diagnostics befor transformation
+plot(full.lm)
+#Diagnostics after transformation
+plot(bc.lm)
+```
+
+Compared to the old model, the new model does not perform better in the significat importance of *shape*. Also, the QQ-plot of the new model is less linear than the one of old model. Therefore, I will still keep the old model as the optimal one. I will continue to improve the model by transforming the predictions.
+
+*Transform the predictors*
+```{r}
+library(splines)
+#Spline Transformations on area
+spli.lm.area = lm(formula = perm ~ bs(area,4) + peri + shape, data = rock)
+summary(spli.lm.area)
+#Nature of the fit
+termplot(spli.lm.area, partial=TRUE,terms = 1)
+
+#Polynomial Transformations on peir
+spli.lm.peri = lm(formula = perm ~ area + bs(peri,4) + shape, data = rock)
+summary(spli.lm.peri)
+#Nature of the fit
+termplot(spli.lm.peri, partial=TRUE,terms = 2)
+
+#Polynomial Transformations on shape
+spli.lm.shape = lm(formula = perm ~ area + peri + bs(shape,4), data = rock)
+summary(spli.lm.shape)
+#Nature of the fit
+termplot(spli.lm.shape, partial=TRUE,terms = 3)
+```
+
+From the result, we can see that the partial for *peri* has negatively related to the constant fill, but do not add any significant, or improve the performance of the model. Thus, I will still choose my final model as *perm ~ area + peri + shape*. 
+
+# Diagnostics of the Choosing Model
+```{r}
+plot(full.lm)
+```
+
+**Diagnosis Results:** From the *Residuals vs. fitted values*, we can see the scatterplot distributes randomly, with some exception outliers. From the *Normal Probability plot*, the points are generally follow the straight line. From the *Scale Lotion*, the plot shows radom pattern. From the *Cook's distance*, we can see there are some outliers affecting the model. Thus, according to the results above, I will pick the full model,*perm ~ area + peri + shape*, as my optimal model for the future steps.
+
+# Predictions of Future Observations
+```{r}
+#New observations
+new.obs <- data.frame(
+  area = c(8, 800, 800, 800, 800, 8000),
+  peri = c(3, 3, 30, 300, 3000, 3000),
+  shape = c(5, 50, 5, 500, 0.05, 0.5)
+)
+
+#Predict based on 99% prediction interval
+full.pre = predict(full.lm, se.fit=T, newdata=new.obs, interval='prediction', level = .99)
+full.pre$fit
+```
+
+From the results above, we can see that the shape has a great effect on the results.
+
+# Interpretation of the Model
+```{r}
+summary(full.lm)
+```
+
+According to our model, *perm = 899.07shape + 0.09area - 0.34peri + 485.62*. The permeability of a petroleum rock has been greatly affecting by its shape, and it is postively related with its area and shape, but negatively related with its perimeter.
+
+**Exercise 5** The *prostate* data - use *lpsa* as the response.
+
+# Load *prostate* data
+```{r}
+library(faraway)
+head(prostate)
+str(prostate)
+```
+
+According to the information above, we know that *prostate* is a data frame with 97 observations and 9 columns. 
+
+**lcavol:** log(cancer volume).
+
+**lweight:** log(prostate weight).
+
+**age:** age.
+
+**lbph:** log(benign prostatic hyperplasia amount)
+
+**svi:** seminal vesicle invasion.
+
+**lcp:** log(capsular penetration).
+
+**gleason:** Gleason score.
+
+**pgg45:** percentage Gleason scores 4 or 5.
+
+**lpsa:** log(prostate specific antigen).
+
+# Initial Data Analysis
+```{r}
+#Summarize the dataset
+summary(prostate)
+```
+
+We have nine numerical variables, and the six summary statistics show us the general distribution of the variables. I am going to analyze in depth with the *lpsa* response.
+
+```{r}
+#Distribution of response
+library(ggplot2)
+ggplot(prostate, aes(x=lpsa)) + 
+  geom_histogram(aes(y=..density..), bins = 20,fill = "white", col = "black") + 
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_rug() +
+  labs(title = 'Distribution of Lpsa') + 
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold.italic"))
+```
+
+From the distribution plot above, we can see that the data are generally normal distributed, and there are some outliers less than zero
+
+```{r}
+#Correlation between variables
+cor(prostate)
+#Pair Plots
+library(ggplot2)
+library(GGally)
+ggpairs(prostate) + 
+  ggtitle("Pair Plots of Prostate") + 
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold.italic"))
+```
+
+From the results above, we can see that *lcavol*, *lweight*, and *svi* has some correlations with *lpsa*. We can continue to define a linear model, and find deeper relationship. 
+
+# Variable Selection
+```{r}
+#Build up full model
+full.lm = lm(formula = lpsa ~ lcavol + lweight + age + lbph + svi + lcp + gleason + 
+    pgg45, data = prostate)
+print(summary(full.lm))
+
+#Apply backward selection model
+full.backward = step(full.lm, direction = "backward")
+print(summary(full.backward))
+
+#Apply forward selection model
+full.forward <- step(lm(lpsa ~ 1, data=prostate), list(upper=full.lm), direction='forward')
+print(summary(full.forward))
+```
+
+I apply both backward and forward selection to the model, and have the same optimal model. According to the report, the optimal model is *lpsa ~ lcavol + lweight + age + lbph + svi*. However, the significant importance of some variables are mild. We may think of improving the model by transforming the variables.
+
+# Exploration of Transformations
+
+*Transform the response lpsa*
+```{r}
+#Box-Cox Transformation of the response
+#Shift lpsa to all postive value
+prostate$'shift_lpsa' = prostate$lpsa+(-min(prostate$lpsa))+1
+
+library(MASS)
+full.bc = boxcox(shift_lpsa ~ lcavol + lweight + age + lbph + svi, data=prostate)
+#Get the lamda of maximum log-Likelihood
+lamda.max = full.bc$x[full.bc$y==max(full.bc$y)]
+
+#Set up new Model
+bc.lm = lm(shift_lpsa^lamda.max ~ lcavol + lweight + age + lbph + svi, data=prostate)
+summary(bc.lm)
+```
+
+From the result, we can see that the lamda of maximum log-Likelihood is very closed to 1. And the new model's performance does not have too much change compared to the old one's. Thus, I will still choose my final model as *lpsa ~ lcavol + lweight + age + lbph + svi*. 
+
+# Diagnostics of the Choosing Model
+```{r}
+my.lm = lm(lpsa ~ lcavol + lweight + age + lbph + svi, data = prostate)
+summary(my.lm)
+plot(my.lm)
+```
+
+**Diagnosis Results:** From the *Residuals vs. fitted values*, we can see the scatterplot distributes randomly, with some exception outliers. From the *Normal Probability plot*, the points are generally follow the straight line. From the *Scale Lotion*, the plot shows a little downward pattern, but generally random. From the *Cook's distance*, we can see there are some outliers affecting the model. Thus, according to the results above, I will pick the model, *lpsa ~ lcavol + lweight + age + lbph + svi*, as my optimal model for the future steps.
+
+# Predictions of Future Observations
+```{r}
+#New observations
+new.obs <- data.frame(
+  lcavol = runif(5, min = -2, max = 4),
+  lweight = runif(5, min = 2, max = 6),
+  age = floor(runif(5, min = 41, max = 79)),
+  lbph = runif(5, min = -2, max = 3),
+  svi = c(0,1,0,1,0),
+  lpsa = runif(5, min = -1, max = 6)
+)
+
+#Predict based on 99% prediction interval
+my.pre = predict(my.lm, se.fit=T, newdata=new.obs, interval='prediction', level = .99)
+my.pre$fit
+```
+
+# Interpretation of the Model
+```{r}
+summary(my.lm)
+```
+
+According to our model, *lpsa = 0.72svi + 0.11lbph - 0.01age + 0.42lweight + 0.57lcavol + 0.95*. The prostate specific antigen is postively related to the seminal vesicle invasion, cancer volume, prostate weight, and benign prostatic hyperplasia amount, but negatively related to age. The prostate specific antigen is greatly affect by cancer volume and seminal vesicle invasion. 
