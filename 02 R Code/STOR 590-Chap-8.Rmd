@@ -1,0 +1,256 @@
+---
+title: "STOR 590-Chap-8"
+author: "Rui Li"
+date: "9/20/2020"
+output: html_document
+---
+
+```{r}
+# Bliss data example page 155
+
+# fit using glm
+library(faraway)
+data (bliss)
+modl=glm(cbind(dead,alive)~conc,family=binomial,bliss)
+summary(modl)$coef
+
+# simpler estimate using standard linear model algorithm
+y=bliss$dead/30
+mu=y
+eta=logit(mu)
+z=eta+(y-mu)/(mu*(1-mu))
+w=30*mu*(1-mu)
+lmod=lm(z~conc,weights=w,bliss)
+summary(lmod)$coef
+
+# iterate 5 times
+for(iter in 1:5){
+eta=lmod$fit
+mu=ilogit(eta)
+z=eta+(y-mu)/(mu*(1-mu))
+w=30*mu*(1-mu)
+lmod=lm(z~bliss$conc,weights=w)
+cat(iter,coef(lmod),"\n")
+}
+
+# two ways to get correct standard errors (need to omit sigma-hat from lm fit)
+xm=model.matrix(lmod)
+wm=diag(w)
+sqrt(diag(solve(t(xm) %*% wm %*% xm)))
+
+# or ...
+
+summary(lmod)$coef[,2]/summary(lmod)$sigma
+
+
+# tests of fit
+
+sumary(modl)
+
+1-pchisq(deviance(modl),df.residual(modl))
+
+anova(modl,test='Chi')
+
+modl2=glm(cbind(dead,alive)~conc+I(conc^2),family=binomial,bliss)
+anova(modl,modl2,test='Chi')
+
+anova(modl2,test='Chi')
+
+# diagnostics
+
+residuals(modl)
+
+residuals(modl,'pearson')
+
+residuals(modl,'response')
+
+bliss$dead/30-fitted(modl)
+
+residuals(modl,'working')
+
+modl$residuals
+
+residuals(lmod)
+
+# leverage and influence
+
+influence(modl)$hat
+
+rstudent(modl)
+
+influence(modl)$coef
+
+cooks.distance(modl)
+
+# new dataset
+
+# Preliminaries to Chapter 8 discussion: review main points 
+# about Galapagos dataset from Chapter 5
+
+# Emphasize use and interpretation of overdispersion parameter
+
+library(faraway)
+data(gala)
+gala=gala[,-2]
+modp=glm(Species~.,family=poisson,gala)
+
+sumary(modp)
+plot(modp)
+
+# calculate deviance and Pearson residuals
+residuals(modp,type='deviance')
+
+residuals(modp,type='pearson')
+
+df.residual(modp)
+deviance(modp)
+sum(residuals(modp,type='deviance')^2)
+sum(residuals(modp,type='pearson')^2)
+
+# testing fit via chi-square distribution
+pchisq(716.8458,24,lower=F)
+pchisq(761.9792,24,lower=F)
+#The model clearly does not fit the data
+
+# note both forms of goodness of fit statistic are much larger than the df.residual
+# - indicates lack of fit of the model
+
+# plots to illustrate fit
+
+halfnorm(residuals(modp))
+# shows no outlier
+
+# plot estimated variance against the mean
+plot((fitted(modp)),((gala$Species-fitted(modp))^2),
+xlab=expression(hat(mu)),ylab=expression((y-hat(mu))^2))
+abline(0,1)
+
+plot(log(fitted(modp)),log((gala$Species-fitted(modp))^2),
+xlab=expression(log(hat(mu))),ylab=expression(log((y-hat(mu))^2)))
+abline(0,1)#Don't fit the data
+
+# variance is proportional to but larger than the mean
+
+# by-hand estimator of dispersion parameter
+(dp=sum(residuals(modp,type='pearson')^2)/df.residual(modp))
+sumary(modp,dispersion=dp)
+
+
+# Alternately, use quasipoisson model
+
+modd=glm(Species~.,family=quasipoisson,gala)
+sumary(modd)
+plot(modd)
+
+# see effect of dropping terms
+drop1(modd,test='F')
+
+
+mod2=glm(Species~Area+Elevation+Scruz+Adjacent,family=quasipoisson,gala)
+summary(mod2)
+
+mod3=glm(Species~Area+Elevation+Adjacent,family=quasipoisson,gala)
+summary(mod3)
+
+
+# new analysis chapter 8
+
+# plot residuals three ways (p. 162)
+
+par(mfrow=c(1,3))
+plot(residuals(modp)~predict(modp,type='response'),
+xlab=expression(hat(mu)),ylab='Deviance Residuals')
+
+plot(residuals(modp)~predict(modp,type='link'),
+xlab=expression(hat(eta)),ylab='Deviance Residuals')
+
+plot(residuals(modp,type='response')~predict(modp,type='link'),
+xlab=expression(hat(eta)),ylab='Response Residuals')
+# second one is the best - shows approx linear fit. Others hard to interpret
+
+
+# plot species v. area three ways (p. 164)
+
+par(mfrow=c(1,3))
+plot(Species~Area,gala)
+
+plot(Species~log(Area),gala)
+
+mu=predict(modp,type='response')
+z=predict(modp)+(gala$Species-mu)/mu
+plot(z~log(Area),gala,ylab='Linearized Response')
+
+# use z = eta + (y-mu) d(eta)/d(mu) formula
+
+
+# also plot linearized response against Area (not good)
+
+plot(z~Area,gala,ylab='Linearized Response')
+
+
+# take logs in all independent variables and compare with earlier deviance 
+modpl=glm(Species~log(Area)+log(Elevation)+log(Nearest)+log(Scruz+0.1)+log(Adjacent),
+family=poisson,gala)
+c(deviance(modp),deviance(modpl))
+
+# modpl is much better as assessed by deviance (uses transformations of x variables)
+
+# partial residual plot
+par(mfrow=c(1,1))
+
+mu=predict(modpl,type='response')
+u=(gala$Species-mu)/mu+coef(modpl)[2]*log(gala$Area)
+plot(u~log(Area),gala,ylab='Partial Residual')
+abline(0,coef(modpl)[2])
+
+#end 9/18/20
+
+
+# diagnostic for link function
+z=predict(modpl)+(gala$Species-mu)/mu
+plot(z~predict(modpl),xlab='Linear Predictor',
+ylab='Linearized Response')
+
+# unusual points - page 166
+halfnorm(rstudent(modpl))
+# a.k.a. "jackknife residuals"
+
+# leverage plot
+gali=influence(modpl)
+halfnorm(gali$hat)
+
+halfnorm(cooks.distance(modpl))
+
+# drop obs. 25 (Santa Cruz) and look for changes in coefficients
+modplr=glm(Species~log(Area)+log(Elevation)+log(Nearest)+log(Scruz+0.1)+
+log(Adjacent),family=poisson,gala,subset=-25)
+cbind(coef(modpl),coef(modplr))
+
+# final model
+modpla=glm(Species~log(Area)+log(Adjacent),family=poisson,gala)
+dp=sum(residuals(modpla,type='pearson')^2)/modpla$df.res
+sumary(modpla,dispersion=dp)
+
+
+
+# is this really the best?
+
+dp2=sum(residuals(modpl,type='pearson')^2)/modpl$df.res
+sumary(modpl,dispersion=dp2)
+#  the variables that have been dropped are not significant
+
+# final model
+modplaq=glm(Species~log(Area)+log(Adjacent),family=quasipoisson,gala)
+summary(modplaq)
+
+
+# conclusions:
+# 1. Use logs of the x variable rather than original scale
+# 2. Drop all except area and adjacent
+# 3. Dropping Santa Cruz does not make much of a difference
+# 4. DO need to correct for overdispersion - use quasipoisson
+#        or calculate dispersion directly
+```
+
+
+

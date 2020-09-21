@@ -1,0 +1,254 @@
+
+ # R code for Chapter 5
+
+# Barcharts for Poisson distribution: p. 83
+
+
+par(mfrow=c(1,3))
+barplot(dpois(0:5,0.5),xlab='y',ylab='Probability',names=0:5,main='mean = 0.5')
+
+barplot(dpois(0:10,2),xlab='y',ylab='Probability',names=0:10,main='mean = 2')
+
+barplot(dpois(0:15,5),xlab='y',ylab='Probability',names=0:15,main='mean = 5')
+
+par(mfrow=c(1,1))
+
+
+# load and initial analysis of Galapagos data
+library(faraway)
+data(gala)
+gala=gala[,-2]
+
+mod1=lm(Species~.,gala)
+plot(mod1,1)
+# observe non-constant variance
+
+# try to improve using Box-Cox transformation
+library(MASS)
+bc=boxcox(mod1)
+bc$x[which.max(bc$y)]
+
+# use a square root transformation
+modt=lm(sqrt(Species)~.,gala)
+plot(modt,1)
+sumary(modt)
+
+# Alternate method: glm with Poisson family
+modp=glm(Species~.,family=poisson,gala)
+sumary(modp)
+plot(modp)
+
+# Will omit detailed discussion of Poisson model since we already did this
+# in chapter 8, but main point is need to take account of overdispersion
+
+modd=glm(Species~.,family=quasipoisson,gala)
+sumary(modd)
+plot(modd)
+
+# Section 5.3
+
+library(faraway)
+data(dicentric)
+round(xtabs(ca/cells~doseamt+doserate,dicentric),2)
+
+with(dicentric,interaction.plot(doseamt,doserate,ca/cells,legend=F))
+
+
+with(dicentric,interaction.plot(doseamt,doserate,ca/cells,legend=T))
+
+lmod=lm(ca/cells~log(doserate)*factor(doseamt),dicentric)
+summary(lmod)$adj
+
+
+plot(residuals(lmod)~fitted(lmod),xlab='Fitted',ylab='Residuals')
+abline(h=0)
+
+# model dose amount as a factor and refit as Poisson regression
+
+dosef=factor(dicentric$doseamt)
+pmod=glm(ca~log(cells)+log(doserate)*dosef,family=poisson,dicentric)
+sumary(pmod)
+
+# same model with log(cells) coefficient fixed at 1
+rmod=glm(ca~offset(log(cells))+log(doserate)*dosef,family=poisson,dicentric)
+sumary(rmod)
+
+# solder data section 5.4
+library(faraway)
+data(solder)
+
+hist(solder$skip,breaks=0:50)
+mean(solder$skips)
+
+# plot theoretical histogram for Poisson distribution with mean 5.53
+
+barplot(dpois(0:15,5.53),xlab='y',ylab='Probability',names=0:15,main='mean = 5.53')
+
+# fit Poisson model with factor variables
+modp=glm(skips~.,family=poisson,solder)
+c(deviance(modp),df.residual(modp))
+
+# plot model results
+plot(modp)
+
+# compute chi-square for deviance
+pchisq(deviance(modp),df.residual(modp),lower=F)
+
+# refit model including interactions
+modp2=glm(skips~(Opening+Solder+Mask+PadType+Panel)^2,family=poisson,solder)
+deviance(modp2)
+
+pchisq(deviance(modp2),df.residual(modp2),lower=F)
+
+# plot histograms
+par(mfrow=c(1,2))
+hist(modp2$fitted,breaks=0:100,xlim=c(0,15),col='blue')
+hist(solder$skips,breaks=0:100,xlim=c(0,15),col='blue')
+
+# hitogram of fitted values does not look like observed values
+
+# Venables-Ripley method - assumes k=1
+library(MASS)
+modn=glm(skips~.,negative.binomial(1),solder)
+summary(modn)
+
+pchisq(deviance(modn),df.residual(modn),lower=T)
+# deviance too small for fitted model
+
+# two plots to assess visual fit of modn:
+
+# first, plot fitted values against y
+par(mfrow=c(1,1))
+plot(modn$fitted,modn$y)
+abline(0,1)
+# many values for which fitted value is much greater than observed
+# (worse problem than for Poisson fit)
+
+# second, side-by-side histograms of fitted and observed values
+# (note use of xlim to limite range of plot)
+par(mfrow=c(1,2))
+hist(modn$y,breaks=0:130,xlim=c(0,20),col='blue')
+hist(modn$fitted,breaks=0:130,xlim=c(0,20),col='blue')
+
+
+# second Venables-Ripley method includes estimator of k
+
+modn1=glm.nb(skips~.,solder)
+summary(modn1)
+
+# same two plots to assess fit
+par(mfrow=c(1,1))
+plot(modn1$fitted,modn$y)
+abline(0,1)
+# this is better than the previous plot but still not too good
+
+# second, side-by-side histograms of fitted and observed values
+# (note use of xlim to limite range of plot)
+par(mfrow=c(1,2))
+hist(modn1$y,breaks=0:130,xlim=c(0,20),col='blue')
+hist(modn1$fitted,breaks=0:130,xlim=c(0,20),col='blue')
+
+# also plot the two fitted histograms against each other
+
+par(mfrow=c(2,2))
+hist(modn1$y,breaks=0:130,xlim=c(0,20),main='Observations')
+hist(modn1$fitted,breaks=0:130,xlim=c(0,20),main='Fitted with k=1')
+hist(modn$fitted,breaks=0:130,xlim=c(0,20),main='Fitted with k Estimated')
+hist(modp2$fitted,breaks=0:130,xlim=c(0,20),main='Second Poisson Fit')
+
+
+# quite similar to the previous histogram
+
+# my conclusion: it's not obvious that negative binomial is the right distribution
+
+
+
+# zero-inflated count models section 5.5
+
+library(faraway)
+library(pscl)
+
+
+data(bioChemists)
+par(mfrow=c(1,2))
+hist(bioChemists$art,breaks=0:20)
+mean(bioChemists$art)
+
+barplot(dpois(0:10,1.6929),xlab='y',ylab='Probability',names=0:10,main='Poisson Mean 1.6929')
+
+modp=glm(art~.,data=bioChemists,family=poisson)
+sumary(modp)
+
+par(mfrow=c(1,1))
+ocount=table(bioChemists$art)[1:8]
+pcount=colSums(predprob(modp)[,1:8])
+plot(pcount,ocount,type='n',xlab='Predicted',ylab='Observed')
+text(pcount,ocount,0:7)
+
+modh=hurdle(art~.,data=bioChemists)
+summary(modh)
+
+
+
+ocount=table(bioChemists$art)[1:8]
+pcount=colSums(predprob(modh)[,1:8])
+plot(pcount,ocount,type='n',xlab='Predicted',ylab='Observed')
+text(pcount,ocount,0:7)
+
+modz=zeroinfl(art~.,data=bioChemists)
+summary(modz)
+
+
+par(mfrow=c(1,1))
+ocount=table(bioChemists$art)[1:8]
+pcount=colSums(predprob(modz)[,1:8])
+plot(pcount,ocount,type='n',xlab='Predicted',ylab='Observed',
+main='Zero-inflated Poisson Model for Biochem Data')
+text(pcount,ocount,0:7)
+
+
+plot(fitted(modh),fitted(modz),xlab='Hurdle Predictions',ylab='ZIF Predictions')
+abline(0,1)
+
+
+modz2=zeroinfl(art~fem+kid5+ment|ment, data=bioChemists)
+summary(modz2)
+
+lrt=2*(modz$loglik-modz2$loglik)
+1-pchisq(lrt,6)
+
+# unfortunately this doesn't work
+anova(modz2,modz)
+
+exp(coef(modz2))
+
+
+newman=data.frame(fem='Men',mar='Single',kid5=0,ment=6)
+predict(modz2,newdata=newman,type='prob')
+
+
+predict(modz2,newdata=newman,type='zero')
+
+
+# aside: we could also try using a zero-inflated model on the solder data
+modn2=hurdle(skips~.,solder)
+summary(modn2)
+
+# same two plots as previously to assess fit
+par(mfrow=c(1,1))
+plot(modn2$fitted,modn2$y)
+abline(0,1)
+# looks a lot better!
+
+# second, side-by-side histograms of fitted and observed values
+# (note use of xlim to limite range of plot)
+par(mfrow=c(1,2))
+hist(modn2$y,breaks=0:130,xlim=c(0,20),col='blue')
+hist(modn2$fitted,breaks=0:130,xlim=c(0,20),col='blue')
+
+# still not good agreement of histograms
+
+# conclusion: still haven't found a suitable distribution for skips data
+
+
+

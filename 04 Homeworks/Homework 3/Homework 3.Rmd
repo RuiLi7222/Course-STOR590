@@ -1,0 +1,292 @@
+---
+title: "HOMEWORK 3 - Exercises in Chapter 2"
+author: "Rui Li"
+date: "8/27/2020"
+header-includes:
+- \usepackage{amsgen,amsmath,amstext,amsbsy,amsopn,amssymb,mathabx,amsthm,bm,bbm}
+- \usepackage[labelsep=space]{caption}
+output:
+  word_document: default
+  html_document: default
+subtitle: $\textbf{STOR 590, FALL 2020}$
+---
+
+**Instructions**
+
+Chapter 2, questions 2 and 4. Hand in on gradescope.
+
+**Exercises**
+
+2. The National Institute of Diabetes and Digestive and Kidney Diseases conducted a study on 768 adult female Pima Indians living near Phoenix. The purpose of the study was to investigate factors related to diabetes. The data may be found in the dataset *pima*.
+
+*(a) Create a factor version of the test results and use this to produce an interleaved histogram to show how the distribution of insulin differs between those testing positive and negative. Do you notice anything unbelievable about the plot?*
+```{r message=FALSE}
+#Insulin: 2-Hour serum insulin (mu U/ml)
+#Test: coded 0 if negative, 1 if positive
+#Import and summary dataset pima
+library("faraway")
+summary(pima)
+head(pima)
+
+#Factor version as test results
+pima$test = as.factor(pima$test)
+levels(pima$test) = c("negative","positive")
+
+#Interleaved historgram
+library(ggplot2)
+ggplot(pima) + 
+  geom_histogram(aes(x=insulin, y=..density.., fill=test), position="dodge",binwidth = 50) +
+  ggtitle("Insulin Difference on Test Results")+
+  theme(plot.title = element_text(size=15, face="bold", hjust=0.5))
+```
+
+**Answers:** The insulin density, which equals to zero, is extremely high. It is unusual and may indicate some missing datas.
+
+*(b) Replace the zero values of insulin with the missing value code NA. Recreate the interleaved histogram plot and comment on the distribution.*
+```{r message=FALSE}
+#Replace zero with NA
+pima$insulin[pima$insulin==0]=NA
+
+#Interleaved historgram
+library(ggplot2)
+ggplot(pima) + 
+  geom_histogram(aes(x=insulin, y=..density.., fill=test), position="dodge",binwidth = 50) +
+  ggtitle("Insulin Difference on Test Results")+
+  theme(plot.title = element_text(size=15, face="bold", hjust=0.5))
+```
+
+**Answers:** According to the plot above, the negative results have a relatively larger density in the low insulin level than the positive results. Therefore, the positive test results generally have a higher insulin standard than the negative test results do. 
+
+*(c) Replace the incredible zeroes in other variables with the missing value code. Fit a model with the result of the diabetes test as the response and all the other variables as predictors. How many observations were used in the model fitting? Why is this less than the number of observations in the data frame.*
+```{r message=FALSE}
+#Overview pima
+summary(pima)
+#help(pima)
+```
+
+According to the help manual:
+
+*glucose:* Plasma glucose concentration at 2 hours in an oral glucose tolerance test.
+
+*diastolic:* Diastolic blood pressure (mm Hg).
+
+*triceps:* Triceps skin fold thickness (mm).
+
+*bmi:* Body mass index (weight in kg/(height in metres squared)).
+
+These variables are unusual to have zero value, and should be replaced with missing value NA.
+
+```{r message=FALSE}
+#Replace with missing value
+pima$glucose[pima$glucose==0]=NA
+pima$diastolic[pima$diastolic==0]=NA
+pima$triceps[pima$triceps==0]=NA
+pima$bmi[pima$bmi==0]=NA
+
+#Fit a model
+full.glm = glm(test ~ .,family = "binomial", data= pima)
+summary(full.glm)
+
+#Extract the Number of Observations from the Fit.
+library("stats")
+print(paste0("The observations of model are ", nobs(full.glm),"."))
+print(paste0("The observations of dataframe are ", nrow(pima),"."))
+```
+
+**Answers:** As from the result above, 392 observations are used in the model fitting. The number is much smaller compared to the sample size of the dataframe, because the samples that exist missing value cannot be employed in the model fitting. 
+
+*(d) Refit the model but now without the insulin and triceps predictors. How many observations were used in fitting this model? Devise a test to compare this model with that in the previous question.*
+```{r message=FALSE}
+#Refit the model
+re.glm = glm(test ~ pregnant + glucose + diastolic + bmi + diabetes + age, family = "binomial", data = pima)
+summary(re.glm)
+
+#Extract the Number of Observations from the Fit.
+library("stats")
+print(paste0("The observations of refit model are ", nobs(re.glm),"."))
+```
+
+**Answers:** According to the result above, the observations of the refit model are 724, which is different to the observations of the previous model. Therefore, we need to remove samples with missing value to have the same observations on two models.
+
+```{r message=FALSE}
+#Remove samples with missing value
+new.pima = na.omit(pima)
+
+#Compare two models
+full.glm = glm(test ~ ., family = "binomial", data = new.pima)
+re.glm = glm(test ~ pregnant + glucose + diastolic + bmi + diabetes + age, family = "binomial", data = new.pima)
+anova(re.glm, full.glm, test = "Chi")
+```
+
+**Answers:** The analysis of deviance table displays that p-value is greater than 0.05. Thus, *insulin*, and *triceps* are not significant in the model. We can exclude them from the full model, and the refit model performs better.
+
+*(e) Use AIC to select a model. You will need to take account of the missing values. Which predictors are selected? How many cases are used in your selected model?*
+```{r message=FALSE}
+#Create a full model beforre tested with AIC
+newfull.glm = glm(test ~ pregnant + glucose + diastolic + bmi + diabetes + age, family = "binomial", data = new.pima)
+
+#Select a model
+select.glm = step(newfull.glm, trace = 0)
+summary(select.glm)
+
+#Extract the Number of Observations from the Fit.
+library("stats")
+print(paste0("The observations of selected model are ", nobs(re.glm),"."))
+```
+
+**Answers:** According to the results above, the model selects five predictors, which are *pregnant, glucose, bmi, diabetes*, and *age*. There are 392 cases in the selected model.
+
+*(f) Create a variable that indicates whether the case contains a missing value. Use this variable as a predictor of the test result. Is missingness associated with the test result? Refit the selected model, but now using as much of the data as reasonable. Explain why it is appropriate to do this.*
+```{r message=FALSE}
+#Create variable to indicate missing value
+pima$`miss` = ifelse(rowSums(is.na(pima))>0,1,0)
+
+#Association between missingness and test result
+miss.glm = glm(test ~ miss, family = "binomial", data = pima)
+summary(miss.glm)
+
+#Check significance
+anova(miss.glm, test = "Chi")
+
+#Refit selected mode
+fit.glm = glm(test ~ pregnant + glucose + bmi + diabetes + age, family = "binomial", data = new.pima)
+summary(fit.glm)
+```
+
+**Answers:** According to the results above, the p-value of missingnes is 0.304 > 5%, indicating that missingness is not significant, and does not associate with the test result. Therefore, we can exclude all samples with missing value, which does not have significant effect on our selected model. My final fitted model is *glm(test ~ pregnant + glucose + bmi + diabetes + age, family = "binomial", data = new.pima).*
+
+*(g) Using the last fitted model of the previous question, what is the difference in the odds of testing positive for diabetes for a woman with a BMI at the first quartile compared with a woman at the third quartile, assuming that all other factors are held constant? Give a confidence interval for this difference.*
+```{r message = FALSE, warning = FALSE}
+#Get BMI value for Q1 and Q3
+bmi.25th = quantile(new.pima$bmi, 0.25)
+bmi.75th = quantile(new.pima$bmi, 0.75)
+
+#BMI Coefficent
+bmi.coef = coef(fit.glm)[4]
+
+#Difference in odds
+diff = bmi.coef*(bmi.25th-bmi.75th)
+diff.odds = exp(diff)/(1+exp(diff))
+print(diff.odds)
+
+#Confidence Interval
+bmi.conf = confint(fit.glm,'bmi')
+odds_ratio = exp(bmi.conf*(bmi.25th-bmi.75th))
+odds_ratio/(1+odds_ratio)
+```
+
+**Answers:** According to the results above, with other factors constant the difference in the odds of testing positive for diabetes for a woman with a BMI at the first quartile compared with a woman at the third quartile is 0.336, with a 95% interval between 0.26 and 0.42.
+
+*(h) Do women who test positive have higher diastolic blood pressures? Is the diastolic blood pressure significant in the regression model? Explain the distinction between the two questions and discuss why the answers are only apparently contradictory.*
+```{r message = FALSE}
+#Relationship between diastolic and test results
+cor(new.pima$diastolic,as.numeric(new.pima$test))
+
+#Interleaved historgram
+library(ggplot2)
+ggplot(new.pima) + 
+  geom_histogram(aes(x=diastolic, y=..density.., fill=test), position="dodge",binwidth = 5) +
+  ggtitle("Diastolic Difference on Test Results")+
+  theme(plot.title = element_text(size=15, face="bold", hjust=0.5))
+
+#Regression model
+mol = glm(test ~ pregnant + glucose + diastolic + bmi + diabetes + age + insulin + triceps,family = "binomial", data=pima)
+summary(mol)
+```
+
+**Answers:** According to the results above, *diastolic* has a postive correlation with *test* results. However, from the histogram, we can see that the positive and negative cases have similar distribution in diastolic level. Also, according to our glm model, *diastolic* is not significant enough for the test response, since the p-value is 0.9 much larger than 5%. Therefore, two questions have contradictory answers.
+
+4. Treatment of prostate cancer depends on whether the cancer has spread to the surrounding lymph nodes. This can be determined using a surgical procedure but it would be better if noninvasive methods could be used. Load in the data and
+learn about the variables by:
+```{r message = FALSE}
+data(nodal, package="boot")
+help(nodal, package="boot")
+```
+
+*(a) A plot consisting of a binary image of the data can be constructed as:*
+```{r message = FALSE}
+nodal$m <- NULL
+image(as.matrix(nodal[order(nodal$r),]), xlab = "Observations", ylab = "Variables", main = "Binary Image of nodal Variables")
+```
+*Improve this plot by ordering the cases on the response and labeling the axes informatively using the axis command.*
+
+**Answers:** The binary image above shows that each column represents a sample, and each row represents a variable. The response is at the bottom row, and the value of each cell is plot by binary color. 
+
+*(b) Fit an appropriate model with nodal outcome as the response and the other five variables as predictors. Is there evidence that at least some of the five predictors are related to the response?*
+```{r message = TRUE}
+#Model with nodal outcome
+full.glm = glm(r ~ ., family = "binomial", data = nodal)
+summary(full.glm)
+```
+
+**Answers:** According to the result above, *xray* and *acid* have p-value < 0.05, and *stage* has p-value < 0.1, indicating that these three predictors have significant effect on the response.  
+
+*(c) Fit a smaller model that removes aged and grade from the model. Can this smaller model be used in preference to the larger model?*
+```{r message=FALSE}
+#Fit a smaller model
+small.glm = glm(r ~ xray + acid + stage, family = "binomial", data = nodal)
+summary(small.glm)
+
+#Compare two models
+anova(small.glm, full.glm, test = "Chi")
+```
+
+**Answers:** According to the result above, the p-value is 0.4562 > 0.1, indicating that the deleted predictors do not have significant impact on the model. Therefore, the smaller model has better performance than the full model. 
+
+*(d) How much does having a serious x-ray result increase the odds of nodal involvement compared to a nonserious result? (Use the smaller model.) Give a 95% confidence interval for the odds.*
+```{r message=FALSE}
+#Odds Ratio with 95% confidence
+xray.conf=confint(small.glm,'xray')
+diff.xray= exp(xray.conf)/(1+exp(xray.conf))
+diff.xray
+```
+
+**Answers:** The result shows that the 95% confidence of the odds ratio is between 0.61 to 0.97.
+
+*(e) Fit a model with all five predictors and all their two-way interactions. Explain why the standard errors of the coefficients are so large.*
+```{r message=FALSE}
+#Full model with interactions
+int.full.glm = glm(r ~ .^2, family = "binomial", data = nodal)
+summary(int.full.glm)
+```
+
+**Answers:** The standard errors are so large because we include all the two-way interactions and make multicollinearity appear. 
+
+*(f) Use the bias-reduced model fitting method described in the chapter to fit the model of the previous question. Which interaction is largest?*
+```{r message=FALSE, warning = FALSE}
+#Use the bias-reduced model to fit the full interaction model
+library(brglm)
+full.bglm <- brglm(r ~ .^2, family = "binomial", data = nodal)
+summary(full.bglm)
+```
+
+**Answers:** From the result above, we can see that the intercation between *stage* and *grade* is the largest, and has the biggest absolute coefficient of -2.82.
+
+*(g) If the predicted response probability exceeds 0.5, the case is classified positively and, if not, negatively. Use the bias-reduced model to classify the cases in the dataset. Compare these to the actual classifications. How many were wrongly classified? Repeat this comparison for the model in (b). Do you think these misclassification rates are a reasonable estimate of how these models will perform in the future?*
+```{r message=FALSE}
+#Predicted response based on bias-reduced model
+pre.reponse = predict(full.bglm, type = "response")
+
+#Make classification
+nodal$`predict` = ifelse(pre.reponse>0.5,1,0)
+
+#Compare to actual classifications
+class.bias.error = sum(nodal$r!=nodal$predict)
+error.rates = class.bias.error/nrow(nodal)
+print(class.bias.error)
+print(error.rates)
+
+#Predicted response based on bias-reduced model
+pre.reponse = predict(full.glm, type = "response")
+
+#Make classification
+nodal$`predict` = ifelse(pre.reponse>0.5,1,0)
+
+#Compare to actual classifications
+class.full.error = sum(nodal$r!=nodal$predict)
+error.rates = class.full.error/nrow(nodal)
+print(class.full.error)
+print(error.rates)
+```
+
+**Answers:** From the results above, the bias-reduced model has 8 misclassification with 15% error rates, while the model in (b) has 10 misclassification with 18% error rates. Since the error rates of the two models are so closed, we can conclude that misclassification rates are a reasonable estimate of how these models will perform in the future.

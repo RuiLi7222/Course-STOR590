@@ -1,12 +1,3 @@
----
-title: "STOR 590-Chap-2"
-author: "Rui Li"
-date: "8/25/2020"
-output: html_document
----
-
-
-```{r, eval=TRUE}
 
 
 # Chapter 2
@@ -229,7 +220,7 @@ lmod5=glm(chd~cigs+cigthr,family=binomial,wcgs)
 summary(lmod5)
 
 plot(wcgs$cigs,lmod5$fitted,pch=20)
-```
+
 
 
 

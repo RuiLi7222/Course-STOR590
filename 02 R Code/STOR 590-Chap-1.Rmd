@@ -116,7 +116,7 @@ sumary(lmod)
 
 # first look at the NOrth Carolina dataset
 library(readr)
-Y=read_csv("~/FILES/UNC Course/STOR Major/STOR 590/04 Homeworks/Homework 1/ProportionNotReturned.csv")
+Y=read_csv("~/Undergraduate Files/UNC Course/STOR Major/STOR 590/04 Homeworks/Homework 1/ProportionNotReturned.csv")
 
 hist(Y$PNR,main='Proportion Absentee Ballots Not Returned - NC Nov 2018')
 plot(density(Y$PNR),main='Proportion Absentee Ballots Not Returned - NC Nov 2018')
